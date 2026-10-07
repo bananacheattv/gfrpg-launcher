@@ -1,0 +1,30 @@
+{
+  "manifestUrl": "https://github.com/bananacheattv/MMORPG_MOD/releases/download/latest/manifest.json",
+  "minecraftVersion": "26.3",
+  "neoforgeVersion": "26.3.0.39-beta",
+  "serverIp": "192.168.0.249:25565",
+  "autoConnect": true,
+  "mods": [],
+  "links": {
+    "website": "",
+    "discord": "",
+    "shop": "",
+    "newsPage": "",
+    "facebook": "",
+    "twitter": "",
+    "youtube": "",
+    "instagram": ""
+  },
+  "news": [
+    {
+      "date": "2026-07-08",
+      "title": "Ouverture du serveur !",
+      "text": "GrandFantacube ouvre ses portes : 41 classes, sprites compagnons, boss animés, groupes jusqu'à 5 joueurs."
+    },
+    {
+      "date": "2026-07-01",
+      "title": "Boss DJ & Golem de Pierre",
+      "text": "Deux boss GeckoLib avec transformation géante et attaque finale. Bonne chance."
+    }
+  ]
+}
