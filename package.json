@@ -1,7 +1,7 @@
 {
   "name": "gfrpg-launcher",
   "productName": "GrandFantacube Launcher",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Launcher officiel du serveur GrandFantacube (mod Eldoria MMORPG)",
   "author": "Copassist",
   "main": "src/main.js",
@@ -19,7 +19,7 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "fr.grandfantacube.launcher",
+    "appId": "com.copassist.gfrpg.launcher",
     "productName": "GrandFantacube Launcher",
     "artifactName": "GrandFantacube-Launcher-Setup-${version}.${ext}",
     "files": [
@@ -32,8 +32,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "perMachine": true
+      "allowToChangeInstallationDirectory": true
     },
     "publish": [
       {
