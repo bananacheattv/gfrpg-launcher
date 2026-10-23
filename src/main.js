@@ -1,4 +1,4 @@
-// GrandFantacube Launcher — processus principal Electron
+// Aeloria Launcher — processus principal Electron
 // Manifeste distant (mis à jour à chaque push du mod) → Java (Mojang) → Minecraft + NeoForge → mods → auth Microsoft → lancement
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
@@ -7,6 +7,7 @@ const { Auth } = require("msmc");
 const { Game, download, valid } = require("./game");
 
 const BUNDLED = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "launcher-config.json"), "utf8"));
+// (le dossier garde son nom d'origine : il contient les mondes, les mods et la connexion Microsoft des joueurs)
 const ROOT = path.join(app.getPath("appData"), ".grandfantacube");        // dossier du jeu
 const SETTINGS_FILE = path.join(ROOT, "launcher-settings.json");
 const MANIFEST_CACHE = path.join(ROOT, "modpack-manifest.json");
@@ -36,6 +37,8 @@ function applyManifest(m) {
     neoforgeVersion: m.neoforge || BUNDLED.neoforgeVersion,
     serverIp: m.serverIp || BUNDLED.serverIp,
     modpackVersion: m.version,
+    modpackDate: m.date,
+    modpackNotes: Array.isArray(m.notes) ? m.notes : [],
     mods: (m.mods || []).map(x => ({ name: x.name || x.file, filename: x.file, url: x.url, sha1: x.sha1, sha256: x.sha256, sha512: x.sha512 }))
   };
 }
@@ -131,7 +134,7 @@ async function play() {
       send("state", { playing: false, playerName: settings.playerName });
       progress("idle", 0, "");
     });
-    progress("launch", 100, "Jeu lancé ! Bon jeu sur GrandFantacube ⚔");
+    progress("launch", 100, "Jeu lancé ! Bon jeu sur Aeloria.");
     setTimeout(() => { if (win) win.minimize(); }, 3000);
   } catch (err) {
     console.error(err);
@@ -143,9 +146,11 @@ async function play() {
 // ---------- fenêtre & IPC ----------
 function createWindow() {
   win = new BrowserWindow({
-    width: 1280, height: 800, minWidth: 1120, minHeight: 720,
+    width: 1100, height: 690, minWidth: 920, minHeight: 600,
+    frame: false,                                        // barre de titre dessinée par l'interface (reduire / agrandir / fermer)
     autoHideMenuBar: true,
-    backgroundColor: "#0d0a1a",
+    backgroundColor: "#0a0810",
+    icon: path.join(__dirname, "renderer", "assets", "aeloria_emblem.png"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true }
   });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
@@ -179,4 +184,48 @@ ipcMain.handle("login", async () => {
 });
 ipcMain.handle("logout", () => { settings.msToken = null; settings.playerName = null; saveSettings(); return true; });
 ipcMain.handle("play", () => { play(); return true; });
-ipcMain.handle("open-link", (_e, url) => shell.openExternal(url));
+ipcMain.handle("open-link", (_e, url) => {
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) shell.openExternal(url);          // jamais autre chose qu'un lien web
+});
+ipcMain.handle("open-folder", () => { fs.mkdirSync(ROOT, { recursive: true }); return shell.openPath(ROOT); });
+ipcMain.handle("win-minimize", () => { if (win) win.minimize(); });
+ipcMain.handle("win-maximize", () => { if (win) (win.isMaximized() ? win.unmaximize() : win.maximize()); });
+ipcMain.handle("win-close", () => { if (win) win.close(); });
+ipcMain.handle("server-status", async () => {
+  const addr = CONFIG.serverIp;
+  if (!addr || addr.startsWith("A_REMPLACER")) return { online: false };
+  const [host, port] = addr.split(":");
+  return pingServer(host, Number(port) || 25565);
+});
+
+// ---------- etat du serveur (Server List Ping de Minecraft) : joueurs en ligne ----------
+function pingServer(host, port, timeoutMs = 3500) {
+  const net = require("net");
+  const varint = n => { const out = []; do { let t = n & 0x7f; n >>>= 7; if (n) t |= 0x80; out.push(t); } while (n); return Buffer.from(out); };
+  const packet = body => Buffer.concat([varint(body.length), body]);
+  return new Promise(resolve => {
+    let done = false, buf = Buffer.alloc(0);
+    const finish = r => { if (done) return; done = true; try { sock.destroy(); } catch {} resolve(r); };
+    const sock = net.createConnection({ host, port });
+    sock.setTimeout(timeoutMs, () => finish({ online: false }));
+    sock.on("error", () => finish({ online: false }));
+    sock.on("connect", () => {
+      const h = Buffer.from(host, "utf8");
+      const port2 = Buffer.alloc(2); port2.writeUInt16BE(port);
+      sock.write(packet(Buffer.concat([varint(0), varint(767), varint(h.length), h, port2, varint(1)])));
+      sock.write(packet(varint(0)));
+    });
+    sock.on("data", d => {
+      buf = Buffer.concat([buf, d]);
+      try {
+        let i = 0, len = 0, shift = 0, b;
+        do { b = buf[i++]; if (b === undefined) return; len |= (b & 0x7f) << shift; shift += 7; } while (b & 0x80);
+        if (buf.length < i + len) return;
+        let j = i; do { b = buf[j++]; } while (b & 0x80);                 // identifiant du paquet
+        let slen = 0; shift = 0; do { b = buf[j++]; slen |= (b & 0x7f) << shift; shift += 7; } while (b & 0x80);
+        const json = JSON.parse(buf.slice(j, j + slen).toString("utf8"));
+        finish({ online: true, players: json.players?.online ?? 0, max: json.players?.max ?? 0 });
+      } catch { finish({ online: false }); }
+    });
+  });
+}

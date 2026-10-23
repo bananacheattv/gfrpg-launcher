@@ -1,8 +1,8 @@
 {
   "name": "gfrpg-launcher",
-  "productName": "GrandFantacube Launcher",
-  "version": "1.1.1",
-  "description": "Launcher officiel du serveur GrandFantacube (mod Eldoria MMORPG)",
+  "productName": "Aeloria Launcher",
+  "version": "1.2.0",
+  "description": "Launcher officiel d'Aeloria (MMORPG Minecraft)",
   "author": "Copassist",
   "main": "src/main.js",
   "scripts": {
@@ -20,15 +20,16 @@
   },
   "build": {
     "appId": "com.copassist.gfrpg.launcher",
-    "productName": "GrandFantacube Launcher",
-    "artifactName": "GrandFantacube-Launcher-Setup-${version}.${ext}",
+    "productName": "Aeloria Launcher",
+    "artifactName": "Aeloria-Launcher-Setup-${version}.${ext}",
     "files": [
       "src/**/*",
       "launcher-config.json",
       "package.json"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,

@@ -17,14 +17,19 @@
   },
   "news": [
     {
-      "date": "2026-07-08",
-      "title": "Ouverture du serveur !",
-      "text": "GrandFantacube ouvre ses portes : 41 classes, sprites compagnons, boss animés, groupes jusqu'à 5 joueurs."
+      "date": "2026-10-23",
+      "title": "Les Mines d'Aeloria",
+      "text": "Une caverne de plus de 400 blocs sur cinq étages : cinq minerais à extraire à la pioche, des monstres de plus en plus forts en descendant, et des lingots pour forger de nouvelles armes et armures."
     },
     {
-      "date": "2026-07-01",
-      "title": "Boss DJ & Golem de Pierre",
-      "text": "Deux boss GeckoLib avec transformation géante et attaque finale. Bonne chance."
+      "date": "2026-10-22",
+      "title": "Donjons v2",
+      "text": "Des donjons de 20 minutes : six épreuves, parcours de saut sans contournement, boss qui se réveille tout seul, sons originaux et écran de mort."
+    },
+    {
+      "date": "2026-10-23",
+      "title": "Une interface toute neuve",
+      "text": "Menu Aeloria, écrans plats, nouveau logo et nouveau launcher."
     }
   ]
 }

@@ -1,6 +1,6 @@
-# GrandFantacube Launcher
+# Aeloria Launcher
 
-Launcher Electron du serveur GrandFantacube (mod Eldoria MMORPG).
+Launcher Electron d'Aeloria (anciennement « GrandFantacube Launcher »).
 
 - **Mods et versions du jeu** : lus à chaque lancement depuis le manifeste publié par
   [MMORPG_MOD](https://github.com/bananacheattv/MMORPG_MOD/releases/tag/latest) → un push sur le mod met à jour les joueurs.
