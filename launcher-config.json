@@ -18,6 +18,11 @@
   "news": [
     {
       "date": "2026-10-23",
+      "title": "Marché d'Aeloria, banque et hôtel des ventes",
+      "text": "Le hub s'agrandit : un marché avec banque, hôtel des ventes, forges, presse de compression, cultures et marchands, et un écran de chargement aux couleurs d'Aeloria."
+    },
+    {
+      "date": "2026-10-23",
       "title": "Les Mines d'Aeloria",
       "text": "Une caverne de plus de 400 blocs sur cinq étages : cinq minerais à extraire à la pioche, des monstres de plus en plus forts en descendant, et des lingots pour forger de nouvelles armes et armures."
     },
