@@ -106,6 +106,20 @@ async function interactiveLogin() {
   return mc;
 }
 
+// ---------- écran de chargement de NeoForge aux couleurs d'Aeloria ----------
+// NeoForge lit config/fml/theme-default.json avant de charger les mods : le launcher le dépose à chaque lancement (le mod fait pareil).
+// Un thème personnalisé sans la marque "_aeloria" n'est jamais remplacé.
+function installLoadingTheme() {
+  try {
+    const src = path.join(__dirname, "theme");
+    const dir = path.join(ROOT, "config", "fml");
+    const current = path.join(dir, "theme-default.json");
+    if (fs.existsSync(current) && !fs.readFileSync(current, "utf8").includes('"_aeloria"')) return;
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of fs.readdirSync(src)) fs.copyFileSync(path.join(src, f), path.join(dir, f));
+  } catch (e) { console.log("Thème de chargement non installé : " + e.message); }
+}
+
 // ---------- lancement ----------
 async function play() {
   try {
@@ -119,6 +133,7 @@ async function play() {
 
     await loadManifest();
     await syncMods();
+    installLoadingTheme();
     const game = new Game(ROOT, ROOT, progress, msg => console.log(msg));
     progress("launch", 0, "Préparation de Minecraft " + CONFIG.minecraftVersion + "…");
     await game.prepare(CONFIG.minecraftVersion, CONFIG.neoforgeVersion);
