@@ -64,7 +64,7 @@
       "version": {
         "type": "label",
         "text": "${version}",
-        "visible": true,
+        "visible": false,
         "maintainAspectRatio": true,
         "right": 10.0,
         "bottom": 10.0,
@@ -83,7 +83,7 @@
             "linearScaling": true
           }
         },
-        "visible": true,
+        "visible": false,
         "maintainAspectRatio": true,
         "right": 10.0,
         "bottom": "1.0rem",
@@ -104,11 +104,28 @@
         },
         "visible": true,
         "maintainAspectRatio": true,
-        "top": 22.0,
+        "centerHorizontally": true,
+        "centerVertically": true,
+        "font": "default"
+      },
+      "status": {
+        "type": "label",
+        "text": "Chargement d’Aeloria…",
+        "visible": true,
         "centerHorizontally": true,
         "centerVertically": false,
+        "bottom": 80.0,
         "font": "default"
       }
+    },
+    "performance": {
+      "visible": false
+    },
+    "progressBars": {
+      "visible": false
+    },
+    "startupLog": {
+      "visible": false
     }
   }
 }
