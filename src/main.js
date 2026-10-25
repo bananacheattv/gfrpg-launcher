@@ -16,6 +16,10 @@ let CONFIG = { ...BUNDLED };
 let win = null;
 let manifestReady = Promise.resolve();
 let settings = { ram: 4, msToken: null, playerName: null };
+let launching = false;
+let activeGame = null;
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
 const authManager = new Auth("select_account");
 
 // ---------- utilitaires ----------
@@ -122,6 +126,12 @@ function installLoadingTheme() {
 
 // ---------- lancement ----------
 async function play() {
+  if (launching || activeGame) {
+    send("error", "Minecraft est déjà lancé ou en cours de préparation. Ferme le jeu avant de le relancer.");
+    send("state", { playing: true, playerName: settings.playerName });
+    return;
+  }
+  launching = true; // set synchronously, before authentication or any download
   try {
     send("state", { playing: true });
     let mc = await restoreSession();
@@ -142,10 +152,16 @@ async function play() {
     const acc = { name: auth.name, uuid: auth.uuid, token: auth.access_token, xuid: auth.meta?.xuid, type: "msa" };
     const server = CONFIG.autoConnect && CONFIG.serverIp && !CONFIG.serverIp.startsWith("A_REMPLACER") ? CONFIG.serverIp : null;
     const p = game.launch(acc, [`-Xmx${settings.ram}G`], server);
+    activeGame = p;
     p.stdout.on("data", d => { try { process.stdout.write("[mc] " + d); } catch {} });
     p.stderr.on("data", d => { try { process.stdout.write("[mc] " + d); } catch {} });
-    p.on("error", e => send("error", "Lancement impossible : " + e.message));
+    p.on("error", e => {
+      if (activeGame === p) activeGame = null;
+      send("state", { playing: false, playerName: settings.playerName });
+      send("error", "Lancement impossible : " + e.message);
+    });
     p.on("close", () => {
+      if (activeGame === p) activeGame = null;
       send("state", { playing: false, playerName: settings.playerName });
       progress("idle", 0, "");
     });
@@ -155,6 +171,8 @@ async function play() {
     console.error(err);
     send("state", { playing: false, playerName: settings.playerName });
     send("error", String(err.message || err));
+  } finally {
+    launching = false;
   }
 }
 
@@ -172,6 +190,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (!primaryInstance) return;
   loadSettings();
   manifestReady = loadManifest();
   createWindow();
@@ -186,7 +205,10 @@ app.whenReady().then(async () => {
     } catch {}
   }
   const mc = await restoreSession();
-  send("state", { playing: false, playerName: settings.playerName, loggedIn: !!mc });
+  send("state", { playing: launching || !!activeGame, playerName: settings.playerName, loggedIn: !!mc });
+});
+app.on("second-instance", () => {
+  if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); }
 });
 app.on("window-all-closed", () => app.quit());
 

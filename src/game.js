@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
+const { download } = require("./download");
 
 const VERSIONS = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const RUNTIMES = "https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
@@ -23,35 +24,6 @@ async function getJson(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} : ${url}`);
   return res.json();
-}
-async function download(url, dest, algo, expected, onBytes) {
-  let last;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      const res = await fetch(url, { redirect: "follow" });
-      if (!res.ok) throw new Error(`Téléchargement échoué (${res.status}) : ${url}`);
-      const tmp = dest + ".part";
-      const out = fs.createWriteStream(tmp);
-      let done = 0;
-      for await (const chunk of res.body) {
-        out.write(chunk);
-        done += chunk.length;
-        if (onBytes) onBytes(done, Number(res.headers.get("content-length")) || 0);
-      }
-      await new Promise((r, j) => out.end(err => (err ? j(err) : r())));
-      if (expected && hashFile(tmp, algo) !== expected.toLowerCase()) {
-        fs.rmSync(tmp, { force: true });
-        throw new Error("Fichier corrompu : " + path.basename(dest));
-      }
-      fs.renameSync(tmp, dest);
-      return;
-    } catch (e) {
-      last = e;
-      await new Promise(r => setTimeout(r, 1000 * 2 ** attempt));
-    }
-  }
-  throw last;
 }
 
 function versionNum(s) {
@@ -82,16 +54,20 @@ function rulesAllow(rules, features = {}) {
 
 async function runAll(jobs, what, progress, parallel = 8) {
   if (!jobs.length) return;
-  let done = 0, i = 0;
+  let done = 0, i = 0, failure = null;
   const worker = async () => {
-    while (i < jobs.length) {
+    while (i < jobs.length && !failure) {
       const job = jobs[i++];
-      await job();
-      done++;
-      progress(what, Math.round((done / jobs.length) * 100), `Téléchargement des ${what} (${done}/${jobs.length})`);
+      try {
+        await job();
+        done++;
+        progress(what, Math.round((done / jobs.length) * 100), `Téléchargement des ${what} (${done}/${jobs.length})`);
+      } catch (error) { failure ||= error; throw error; }
     }
   };
-  await Promise.all(Array.from({ length: parallel }, worker));
+  // Do not release the launch guard while other workers are still writing game files.
+  await Promise.allSettled(Array.from({ length: parallel }, worker));
+  if (failure) throw failure;
 }
 
 class Game {
@@ -284,4 +260,4 @@ class Game {
   }
 }
 
-module.exports = { Game, download, valid, hashFile };
+module.exports = { Game, download, valid, hashFile, runAll };
