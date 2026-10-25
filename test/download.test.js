@@ -83,7 +83,7 @@ test("verified downloads preserve installed mods across races and Windows replac
     const file = dest("locked"); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, "installed");
     const before = requests;
     const download = createDownloader({ sleep: immediate, renameFile: async () => { throw Object.assign(new Error("locked"), { code: "EPERM" }); } });
-    await assert.rejects(download(url, file, "sha256", digest(payload)), error => error.code === "EPERM" && /Ferme Minecraft/.test(error.message));
+    await assert.rejects(download(url, file, "sha256", digest(payload)), error => error.code === "EPERM" && error.message.includes(file));
     assert.equal(requests - before, 1); assert.equal(fs.readFileSync(file, "utf8"), "installed"); assert.deepEqual(staged(file), []);
   });
   await t.test("a failed queued download does not block the next attempt", async () => {
@@ -91,5 +91,11 @@ test("verified downloads preserve installed mods across races and Windows replac
     const first = download(url + "/missing", file, "sha256", null);
     const second = download(url, file, "sha256", digest(payload));
     await assert.rejects(first, /404/); await second; assert.equal(digest(fs.readFileSync(file)), digest(payload));
+  });
+  await t.test("Windows read-only installed JAR can be updated without any running game", { skip: process.platform !== "win32" }, async () => {
+    const file = dest("readonly"); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, "installed");
+    fs.chmodSync(file, 0o444);
+    await createDownloader({ sleep: immediate })(url, file, "sha256", digest(payload));
+    assert.equal(digest(fs.readFileSync(file)), digest(payload)); assert.deepEqual(staged(file), []);
   });
 });

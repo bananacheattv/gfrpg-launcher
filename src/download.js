@@ -13,8 +13,16 @@ function createDownloader({ fetchFile = (...args) => fetch(...args), renameFile 
       try { await renameFile(tmp, dest); return; }
       catch (cause) {
         if (!["EPERM", "EBUSY", "EACCES"].includes(cause.code)) throw cause;
+        // Windows refuses to replace read-only files even with no running game.
+        // Only clear this attribute after verifying the replacement download.
+        if (process.platform === "win32" && i === 0) {
+          try {
+            const info = await fs.promises.stat(dest);
+            if (info.isFile() && !(info.mode & 0o200)) await fs.promises.chmod(dest, info.mode | 0o200);
+          } catch { /* Preserve the actual replacement error below. */ }
+        }
         if (i + 1 === replaceAttempts) {
-          const error = new Error(`Impossible de mettre à jour ${path.basename(dest)} : le fichier est utilisé ou son remplacement est refusé. Ferme Minecraft et les autres fenêtres du launcher, puis réessaie.`, { cause });
+          const error = new Error(`Impossible de remplacer ${dest} (${cause.code}). Windows refuse l’accès au fichier : vérifie les droits du dossier et qu’aucun programme ne le verrouille.`, { cause });
           error.code = cause.code; error.replacementBlocked = true; throw error;
         }
         await sleep(Math.min(100 * 2 ** i, 1000));
