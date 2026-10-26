@@ -211,10 +211,10 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* Aperçu hors Electron (navigateur) : API factice. En jeu, le preload fournit window.gfrpg. */
-if (!window.gfrpg) {
+/* Aperçu hors Electron (navigateur) : API factice. En jeu, le preload fournit window.aeloria. */
+if (!window.aeloria) {
   const demo = new URLSearchParams(location.search);
-  window.gfrpg = {
+  window.aeloria = {
     getConfig: async () => ({ launcherVersion: "1.2.0", minecraftVersion: "26.3", neoforgeVersion: "26.3.0.39-beta", modpackVersion: "12-8eaf0c0", modpackDate: "2026-10-23",
       modpackNotes: ["Mines d'Aeloria : caverne immense, minerais à la pioche", "Donjons de 20 minutes, boss qui se réveille tout seul", "Nouvelle interface plate dans tout le jeu"],
       serverIp: "192.168.0.249:25565", mods: [{ name: "Aeloria MMORPG" }, { name: "worldedit 7.4.6-beta-02" }],
@@ -239,9 +239,9 @@ function show(page) {
 }
 document.querySelectorAll(".nav a[data-page]").forEach(a => a.onclick = () => show(a.dataset.page));
 $("bSettings").onclick = () => show("settings");
-$("bMin").onclick = () => gfrpg.minimize();
-$("bMax").onclick = () => gfrpg.maximize();
-$("bClose").onclick = () => gfrpg.close();
+$("bMin").onclick = () => aeloria.minimize();
+$("bMax").onclick = () => aeloria.maximize();
+$("bClose").onclick = () => aeloria.close();
 if (new URLSearchParams(location.search).get("page")) show(new URLSearchParams(location.search).get("page"));
 
 function toast(msg) {
@@ -264,8 +264,8 @@ function refreshAccount(name) {
   }
 }
 async function toggleLogin() {
-  if (loggedIn) { await gfrpg.logout(); refreshAccount(null); return; }
-  try { const r = await gfrpg.login(); refreshAccount(r.playerName); }
+  if (loggedIn) { await aeloria.logout(); refreshAccount(null); return; }
+  try { const r = await aeloria.login(); refreshAccount(r.playerName); }
   catch { toast("Connexion Microsoft annulée ou échouée."); }
 }
 $("accBtn").onclick = toggleLogin; $("accBtn2").onclick = toggleLogin;
@@ -282,8 +282,8 @@ function setPlaying(p) {
   if (!p) { setPlay("JOUER", 0, false); $("statusTxt").textContent = ""; }
   else if (!$("playBtn").classList.contains("busy")) setPlay("DÉMARRAGE…", 0, true, true);
 }
-$("playBtn").onclick = () => { if (playing) return; setPlaying(true); gfrpg.play(); };
-gfrpg.onProgress(d => {
+$("playBtn").onclick = () => { if (playing) return; setPlaying(true); aeloria.play(); };
+aeloria.onProgress(d => {
   if (d.step === "idle") return;
   if (d.step === "update") { $("statusTxt").textContent = d.label; return; }
   if (d.step === "launch" && d.percent >= 100) { setPlay("JEU LANCÉ", 100, true); $("statusTxt").textContent = d.label || ""; return; }
@@ -291,14 +291,14 @@ gfrpg.onProgress(d => {
   setPlay(pct > 0 ? "CHARGEMENT… " + pct + " %" : "CHARGEMENT…", pct, true, pct <= 0);
   if (d.label) $("statusTxt").textContent = d.label;
 });
-gfrpg.onState(d => { setPlaying(!!d.playing); if (d.playerName !== undefined) refreshAccount(d.playerName); });
-gfrpg.onError(msg => { toast(msg); setPlaying(false); });
+aeloria.onState(d => { setPlaying(!!d.playing); if (d.playerName !== undefined) refreshAccount(d.playerName); });
+aeloria.onError(msg => { toast(msg); setPlaying(false); });
 
 /* ---------- reglages ---------- */
 function setRamFill(v) { $("ram").style.setProperty("--pct", ((v - 2) / 14) * 100 + "%"); }
 $("ram").oninput = e => { $("ramVal").textContent = e.target.value + " Go"; setRamFill(e.target.value); };
-$("ram").onchange = e => gfrpg.setRam(e.target.value);
-$("openDir").onclick = () => gfrpg.openFolder();
+$("ram").onchange = e => aeloria.setRam(e.target.value);
+$("openDir").onclick = () => aeloria.openFolder();
 
 /* ---------- donnees ---------- */
 function card(title, sub, body, date) {
@@ -314,27 +314,27 @@ async function refreshServer() {
   const pending = !cfg.serverIp || cfg.serverIp.startsWith("A_REMPLACER");
   if (pending) { $("lblOnline").textContent = "Serveur"; $("valOnline").textContent = "Bientôt"; $("dotOnline").className = "dot gold"; return; }
   try {
-    const s = await gfrpg.serverStatus();
+    const s = await aeloria.serverStatus();
     if (s && s.online) { $("lblOnline").textContent = "En ligne"; $("valOnline").textContent = s.players + (s.max ? " / " + s.max : ""); $("dotOnline").className = "dot"; }
     else { $("lblOnline").textContent = "Serveur"; $("valOnline").textContent = "Hors ligne"; $("dotOnline").className = "dot red"; }
   } catch { $("valOnline").textContent = "—"; }
 }
 (async () => {
-  cfg = await gfrpg.getConfig();
-  $("valVer").textContent = cfg.minecraftVersion;
-  $("aboutTxt").textContent = "Launcher v" + (cfg.launcherVersion || "?") + " · Minecraft " + cfg.minecraftVersion + " · NeoForge " + (cfg.neoforgeVersion || "?")
+  cfg = await aeloria.getConfig();
+  $("valVer").textContent = cfg.gameVersion || "0.0";
+  $("aboutTxt").textContent = "Aeloria — Jeu " + (cfg.gameVersion || "0.0") + " · Minecraft " + cfg.minecraftVersion + " · NeoForge " + (cfg.neoforgeVersion || "?")
     + (cfg.modpackVersion ? " · mod " + cfg.modpackVersion : "");
   const notes = cfg.modpackNotes || [];
-  if (notes.length) $("newsList").appendChild(card("Dernières modifications du jeu", "Version " + (cfg.modpackVersion || "?"), notes, cfg.modpackDate || ""));
+  if (notes.length) $("newsList").appendChild(card("Dernières modifications du jeu", "Version " + (cfg.gameVersion || "0.0"), notes, cfg.modpackDate || ""));
   for (const n of cfg.news || []) $("newsList").appendChild(card(n.title, null, n.text, n.date));
-  $("changeList").appendChild(card("Version " + (cfg.modpackVersion || "?"), cfg.modpackDate || "", notes.length ? notes : ["Pas de notes pour cette version."]));
+  $("changeList").appendChild(card("Version " + (cfg.gameVersion || "0.0"), cfg.modpackDate || "", notes.length ? notes : ["Pas de notes pour cette version."]));
   $("changeList").appendChild(card("Mods installés", (cfg.mods || []).length + " fichiers", (cfg.mods || []).map(m => m.name)));
   const L = cfg.links || {};
   document.querySelectorAll("[data-link]").forEach(el => {
     const url = L[el.dataset.link];
-    if (url) { el.hidden = false; el.onclick = () => gfrpg.openLink(url); }
+    if (url) { el.hidden = false; el.onclick = () => aeloria.openLink(url); }
   });
-  const s = await gfrpg.getSettings();
+  const s = await aeloria.getSettings();
   $("ram").value = s.ram; $("ramVal").textContent = s.ram + " Go"; setRamFill(s.ram);
   refreshAccount(s.playerName);
   refreshServer(); setInterval(refreshServer, 30000);
