@@ -156,7 +156,7 @@ async function play() {
     const auth = mc.mclc();
     const acc = { name: auth.name, uuid: auth.uuid, token: auth.access_token, xuid: auth.meta?.xuid, type: "msa" };
     const server = CONFIG.autoConnect && CONFIG.serverIp && !CONFIG.serverIp.startsWith("A_REMPLACER") ? CONFIG.serverIp : null;
-    const p = game.launch(acc, [`-Xmx${settings.ram}G`], server);
+    const p = game.launch(acc, [`-Xmx${settings.ram}G`, `-Daeloria.server=${CONFIG.serverIp || "192.168.0.249:25565"}`], server);
     activeGame = p;
     p.stdout.on("data", d => { try { process.stdout.write("[mc] " + d); } catch {} });
     p.stderr.on("data", d => { try { process.stdout.write("[mc] " + d); } catch {} });
