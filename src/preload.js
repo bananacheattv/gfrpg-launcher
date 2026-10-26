@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("gfrpg", {
+contextBridge.exposeInMainWorld("aeloria", {
   getConfig: () => ipcRenderer.invoke("get-config"),
   getSettings: () => ipcRenderer.invoke("get-settings"),
   setRam: (ram) => ipcRenderer.invoke("set-ram", ram),

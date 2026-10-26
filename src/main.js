@@ -5,6 +5,8 @@ const path = require("path");
 const fs = require("fs");
 const { Auth } = require("msmc");
 const { Game, download, valid } = require("./game");
+// Public game version is independent of Minecraft and installer updates.
+const GAME_VERSION = "0.0";
 
 const BUNDLED = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "launcher-config.json"), "utf8"));
 // (le dossier garde son nom d'origine : il contient les mondes, les mods et la connexion Microsoft des joueurs)
@@ -12,7 +14,7 @@ const ROOT = path.join(app.getPath("appData"), ".grandfantacube");        // dos
 const SETTINGS_FILE = path.join(ROOT, "launcher-settings.json");
 const MANIFEST_CACHE = path.join(ROOT, "modpack-manifest.json");
 
-let CONFIG = { ...BUNDLED };
+let CONFIG = { ...BUNDLED, gameVersion: GAME_VERSION };
 let win = null;
 let manifestReady = Promise.resolve();
 let settings = { ram: 4, msToken: null, playerName: null };
@@ -37,6 +39,7 @@ function progress(step, percent, label) { send("progress", { step, percent, labe
 function applyManifest(m) {
   CONFIG = {
     ...BUNDLED,
+    gameVersion: m.gameVersion || GAME_VERSION,
     minecraftVersion: m.minecraft || BUNDLED.minecraftVersion,
     neoforgeVersion: m.neoforge || BUNDLED.neoforgeVersion,
     serverIp: m.serverIp || BUNDLED.serverIp,
@@ -66,9 +69,10 @@ async function syncMods() {
   fs.mkdirSync(modsDir, { recursive: true });
   // Manifeste local : fichiers gérés par le launcher → les anciens sont supprimés,
   // les mods ajoutés à la main sont conservés.
-  const manifestFile = path.join(modsDir, ".gfrpg-manifest.json");
+  const manifestFile = path.join(modsDir, ".aeloria-manifest.json");
+  const legacyManifest = path.join(modsDir, ".gfrpg-manifest.json");
   let managed = {};
-  try { managed = JSON.parse(fs.readFileSync(manifestFile, "utf8")); } catch {}
+  try { managed = JSON.parse(fs.readFileSync(fs.existsSync(manifestFile) ? manifestFile : legacyManifest, "utf8")); } catch {}
   const wanted = new Set(CONFIG.mods.map(m => m.filename));
   for (const old of Object.keys(managed)) {
     if (!wanted.has(old) && !old.includes("/") && !old.includes("\\")) {
@@ -87,6 +91,7 @@ async function syncMods() {
     managed[mod.filename] = mod.url;
   }
   fs.writeFileSync(manifestFile, JSON.stringify(managed, null, 2));
+  if(fs.existsSync(legacyManifest))fs.rmSync(legacyManifest);
 }
 
 // ---------- auth Microsoft ----------

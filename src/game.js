@@ -236,7 +236,7 @@ class Game {
       assets_root: path.join(this.dir, "assets"), assets_index_name: this.version.assetIndex.id,
       auth_uuid: acc.uuid, auth_access_token: acc.token, clientid: "0", auth_xuid: acc.xuid || "0",
       user_type: acc.type || "msa", version_type: "release", natives_directory: natives,
-      launcher_name: "GrandFantacube", launcher_version: "1", classpath: cp.join(sep),
+      launcher_name: "Aeloria", launcher_version: "1", classpath: cp.join(sep),
       library_directory: path.join(this.dir, "libraries"), classpath_separator: sep,
       quickPlayMultiplayer: quickPlayServer || ""
     };

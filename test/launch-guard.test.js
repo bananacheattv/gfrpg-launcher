@@ -9,7 +9,7 @@ function loadMain(primary = true) {
   const ipc = {}, events = {}, children = []; let syncs = 0, quits = 0, authCalls = 0;
   let unblock; const gate = new Promise(resolve => { unblock = resolve; });
   const config = JSON.stringify({ mods: [], minecraftVersion: "26.3", neoforgeVersion: "test", manifestUrl: "https://fixture.test/manifest" });
-  const app = { getPath: () => "/fixture", requestSingleInstanceLock: () => primary, quit: () => quits++, whenReady: () => new Promise(() => {}), on: (name, cb) => { events[name] = cb; } };
+  const app = { getPath: () => "/fixture", getVersion: () => "1.3.3", requestSingleInstanceLock: () => primary, quit: () => quits++, whenReady: () => new Promise(() => {}), on: (name, cb) => { events[name] = cb; } };
   const fakeFs = { ...fs, readFileSync: file => String(file).endsWith("launcher-config.json") ? config : String(file).endsWith("launcher-settings.json") ? '{}' : (() => { throw Error("no cache"); })(), mkdirSync: () => {}, writeFileSync: () => {}, existsSync: () => false, readdirSync: () => [] };
   const fakeGame = { download: async () => {}, valid: () => false, Game: class {
     async prepare() { syncs++; await gate; }
@@ -35,4 +35,8 @@ test("only one preparation/game can run, and a finished game can be relaunched",
 });
 test("a second launcher process quits before opening another window", () => {
   const main = loadMain(false); assert.equal(main.quits(), 1); assert.equal(main.syncs(), 0);
+});
+test("public game version remains 0.0 independently from Minecraft and installer versions", async () => {
+  const main=loadMain();const config=await main.ipc["get-config"]();
+  assert.equal(config.gameVersion,"0.0");assert.equal(config.minecraftVersion,"26.3");assert.equal(config.launcherVersion,"1.3.3");
 });
