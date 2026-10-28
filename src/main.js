@@ -269,6 +269,13 @@ ipcMain.handle("play", () => { play(); return true; });
 ipcMain.handle("open-link", (_e, url) => {
   if (typeof url === "string" && /^https?:\/\//i.test(url)) shell.openExternal(url);          // jamais autre chose qu'un lien web
 });
+ipcMain.handle("install-shaders",async()=>{
+  if(updating||launching||activeGame)return{ok:false,message:"Ferme Minecraft avant d’installer les shaders."};
+  updating=true;publishUpdates({busy:true,message:"Installation du support des shaders…"});
+  try{await manifestReady;await require("./graphics").installGraphics(ROOT,CONFIG.minecraftVersion);return{ok:true,message:"Support installé. Choisis ton pack dans Options → Graphismes → Shaders."};}
+  catch(e){return{ok:false,message:e.message};}finally{updating=false;publishUpdates({busy:false});}
+});
+ipcMain.handle("open-shaders-folder",()=>{const folder=path.join(ROOT,"shaderpacks");fs.mkdirSync(folder,{recursive:true});return shell.openPath(folder);});
 ipcMain.handle("open-folder", () => { fs.mkdirSync(ROOT, { recursive: true }); return shell.openPath(ROOT); });
 ipcMain.handle("win-minimize", () => { if (win) win.minimize(); });
 ipcMain.handle("win-maximize", () => { if (win) (win.isMaximized() ? win.unmaximize() : win.maximize()); });

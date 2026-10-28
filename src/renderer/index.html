@@ -209,6 +209,9 @@
         <div class="row"><div class="l">Mémoire allouée au jeu<small>2 à 16 Go : 6 à 8 Go conviennent à la plupart des machines.</small></div>
           <div class="ram"><input type="range" id="ram" min="2" max="16" step="1" value="4"><b id="ramVal">4 Go</b></div></div>
         <div class="row"><div class="l">Dossier du jeu<small>Mods, captures d'écran et sauvegardes.</small></div><button class="btn" id="openDir">Ouvrir</button></div>
+        <div class="row"><div class="l">Shaders<small>Iris + Sodium compatibles · redémarrage du jeu requis</small></div><button class="btn primary" id="installShaders">Installer le support</button></div>
+        <div class="row"><div class="l">Mes packs de shaders<small>Dépose tes packs ZIP ici, puis active-les dans les options du jeu.</small></div><button class="btn" id="openShaders">Ouvrir le dossier</button></div>
+        <div class="about" id="shaderStatus" role="status" aria-live="polite"></div>
         <div class="about" id="aboutTxt"></div>
       </div>
     </section>
@@ -244,6 +247,8 @@ function show(page) {
   document.querySelectorAll(".nav a[data-page]").forEach(a => a.classList.toggle("on", a.dataset.page === page));
 }
 document.querySelectorAll(".nav a[data-page]").forEach(a => a.onclick = () => show(a.dataset.page));
+$("installShaders").onclick=async()=>{const button=$("installShaders");button.disabled=true;$("shaderStatus").textContent="Installation du support des shaders…";try{const r=await aeloria.installShaders();$("shaderStatus").textContent=r.message;if(r.ok)button.textContent="Support installé";}catch(e){$("shaderStatus").textContent=e.message;}finally{button.disabled=false;}};
+$("openShaders").onclick=()=>aeloria.openShadersFolder();
 $("bSettings").onclick = () => show("settings");
 $("bMin").onclick = () => aeloria.minimize();
 $("bMax").onclick = () => aeloria.maximize();
