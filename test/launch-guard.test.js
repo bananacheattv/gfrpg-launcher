@@ -17,7 +17,7 @@ function loadMain(primary = true) {
   } };
   const mc = { profile: { name: "Test" }, mclc: () => ({ name: "Test", uuid: "test", access_token: "test", meta: {} }) };
   const ctx = vm.createContext({ require: name => name === "electron" ? { app, ipcMain: { handle: (name, cb) => { ipc[name] = cb; } }, shell: {}, BrowserWindow: class {} }
-    : name === "fs" ? fakeFs : name === "./game" ? fakeGame : name === "msmc" ? { Auth: class { async launch() { authCalls++; return { getMinecraft: async () => mc, save: () => "token" }; } async refresh() { return { getMinecraft: async () => mc, save: () => "token" }; } } } : require(name),
+    : name === "fs" ? fakeFs : name === "./updates" ? require("../src/updates") : name === "./game" ? fakeGame : name === "msmc" ? { Auth: class { async launch() { authCalls++; return { getMinecraft: async () => mc, save: () => "token" }; } async refresh() { return { getMinecraft: async () => mc, save: () => "token" }; } } } : require(name),
     __dirname: path.join(__dirname, "../src"), console: { log() {}, warn() {}, error() {} }, process, Buffer, setTimeout: () => {}, fetch: async () => ({ ok: true, text: async () => JSON.stringify({ mods: [], minecraft: "26.3" }) }) });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../src/main.js"), "utf8"), ctx);
   return { ctx, ipc, events, children, unblock, syncs: () => syncs, quits: () => quits, authCalls: () => authCalls };

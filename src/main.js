@@ -20,6 +20,39 @@ let manifestReady = Promise.resolve();
 let settings = { ram: 4, msToken: null, playerName: null };
 let launching = false;
 let activeGame = null;
+let updating = false, updater = null, launcherUpdate = false, launcherDownloaded = false;
+let updateStatus = { available: false, checking: true, busy: false, message: "Vérification des mises à jour…" };
+function publishUpdates(extra = {}) {
+  updateStatus = { ...updateStatus, ...extra, launcher: launcherUpdate, restart: launcherDownloaded };
+  send("update-status", updateStatus);return updateStatus;
+}
+async function checkUpdates(refresh = true) {
+  if (updating) return updateStatus;
+  publishUpdates({ checking: true });
+  const fresh = refresh ? await loadManifest() : true;
+  try {
+    const available = require("./updates").needsUpdate(ROOT, CONFIG, valid) || launcherUpdate;
+    return publishUpdates({ checking: false, available, message: available ? "Une mise à jour est disponible." : fresh ? "Aeloria est à jour." : "Vérification impossible hors connexion.", offline: !fresh });
+  } catch (error) {return publishUpdates({ checking: false, available: false, offline: true, message: error.message });}
+}
+async function updateGame() {
+  if (updating || launching || activeGame) return { ok: false, message: "Ferme Minecraft avant de mettre à jour." };
+  updating = true;
+  publishUpdates({ busy: true, checking: false, message: "Mise à jour en cours…" });
+  try {
+    if (!await loadManifest()) throw new Error("Connexion au serveur de mises à jour impossible. Réessaie plus tard.");
+    await syncMods((step,percent,label) => publishUpdates({busy:true,percent,message:label}));installLoadingTheme();
+    const game = new Game(ROOT, ROOT, (step, percent, label) => publishUpdates({ busy: true, percent, message: label }), msg => console.log(msg));
+    await game.prepare(CONFIG.minecraftVersion, CONFIG.neoforgeVersion);
+    if (updater && launcherUpdate && !launcherDownloaded) await updater.downloadUpdate();
+    updating = false;
+    await checkUpdates(false);publishUpdates({ busy: false, percent: 100, message: launcherDownloaded ? "Launcher prêt : redémarre pour installer la mise à jour." : "Aeloria est à jour." });
+    return { ok: true };
+  } catch (error) {
+    publishUpdates({ busy: false, checking: false, available: true, message: String(error.message || error) });
+    return { ok: false, message: String(error.message || error) };
+  } finally {updating = false;}
+}
 const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) app.quit();
 const authManager = new Auth("select_account");
@@ -57,14 +90,16 @@ async function loadManifest() {
     applyManifest(JSON.parse(text));
     fs.mkdirSync(ROOT, { recursive: true });
     fs.writeFileSync(MANIFEST_CACHE, text);
+    return true;
   } catch (e) {
     console.warn("Manifeste distant indisponible :", e.message);
     try { applyManifest(JSON.parse(fs.readFileSync(MANIFEST_CACHE, "utf8"))); } catch {}
+    return false;
   }
 }
 
 // ---------- mods ----------
-async function syncMods() {
+async function syncMods(report = progress) {
   const modsDir = path.join(ROOT, "mods");
   fs.mkdirSync(modsDir, { recursive: true });
   // Manifeste local : fichiers gérés par le launcher → les anciens sont supprimés,
@@ -85,8 +120,8 @@ async function syncMods() {
     const dest = path.join(modsDir, mod.filename);
     const [algo, hash] = mod.sha512 ? ["sha512", mod.sha512] : mod.sha256 ? ["sha256", mod.sha256] : ["sha1", mod.sha1];
     if (!(hash ? valid(dest, algo, hash) : fs.existsSync(dest) && managed[mod.filename] === mod.url)) {
-      progress("mods", 0, `Téléchargement de ${mod.name}…`);
-      await download(mod.url, dest, algo, hash, (d, t) => t && progress("mods", Math.round((d / t) * 100), `${mod.name} — ${(d / 1048576).toFixed(1)} / ${(t / 1048576).toFixed(1)} Mo`));
+      report("mods", 0, `Téléchargement de ${mod.name}…`);
+      await download(mod.url, dest, algo, hash, (d, t) => t && report("mods", Math.round((d / t) * 100), `${mod.name} — ${(d / 1048576).toFixed(1)} / ${(t / 1048576).toFixed(1)} Mo`));
     }
     managed[mod.filename] = mod.url;
   }
@@ -131,6 +166,7 @@ function installLoadingTheme() {
 
 // ---------- lancement ----------
 async function play() {
+  if (updating) {send("error", "Mise à jour en cours. Attends sa fin avant de lancer Minecraft.");return;}
   if (launching || activeGame) {
     send("error", "Minecraft est déjà lancé ou en cours de préparation. Ferme le jeu avant de le relancer.");
     send("state", { playing: true, playerName: settings.playerName });
@@ -202,11 +238,12 @@ app.whenReady().then(async () => {
   // Mise à jour auto du launcher (GitHub Releases) — silencieux en dev
   if (app.isPackaged) {
     try {
-      const { autoUpdater } = require("electron-updater");
-      autoUpdater.on("update-downloaded", () => {
-        progress("update", 100, "Mise à jour du launcher téléchargée — elle s'installera à la fermeture.");
-      });
-      autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+      const { autoUpdater } = require("electron-updater");updater = autoUpdater;
+      updater.autoDownload = false;
+      updater.on("update-available", () => { launcherUpdate = true;publishUpdates({ available: true, message: "Mise à jour du launcher disponible." }); });
+      updater.on("download-progress", info => publishUpdates({ busy: true, percent: info.percent, message: "Téléchargement du launcher… " + Math.round(info.percent) + " %" }));
+      updater.on("update-downloaded", () => { launcherDownloaded = true;publishUpdates({ busy: false, available: true, message: "Redémarre le launcher pour installer sa mise à jour." }); });
+      updater.checkForUpdates().catch(() => {});
     } catch {}
   }
   const mc = await restoreSession();
@@ -218,6 +255,9 @@ app.on("second-instance", () => {
 app.on("window-all-closed", () => app.quit());
 
 ipcMain.handle("get-config", async () => { await manifestReady; return { ...CONFIG, launcherVersion: app.getVersion() }; });
+ipcMain.handle("get-update-status", async () => { await manifestReady;return checkUpdates(); });
+ipcMain.handle("update-game", () => updateGame());
+ipcMain.handle("install-launcher-update", () => { if (updater && launcherDownloaded && !activeGame && !launching && !updating) {updater.quitAndInstall();return true;}return false; });
 ipcMain.handle("get-settings", () => ({ ram: settings.ram, playerName: settings.playerName, loggedIn: !!settings.msToken }));
 ipcMain.handle("set-ram", (_e, ram) => { settings.ram = Math.min(16, Math.max(2, Number(ram) || 4)); saveSettings(); return settings.ram; });
 ipcMain.handle("login", async () => {
