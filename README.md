@@ -20,3 +20,7 @@ Les téléchargements utilisent des fichiers temporaires uniques, attendent la f
 Une seule fenêtre de launcher est autorisée par session ; un second clic ne peut pas lancer une deuxième préparation ou modifier les mods pendant que le jeu lancé par cette fenêtre tourne.
 
 Après une erreur `ENOENT`/`EPERM` sur un fichier `.jar.part`, fermer Minecraft et le launcher, puis installer la version 1.3.1. Conserver le dossier `.grandfantacube` : il contient les mondes, les réglages et la connexion du joueur. Les anciens fichiers `.part` ne sont pas réutilisés.
+
+
+### Interface 1.3.6
+Fond citadelle original partagé avec le jeu, navigation et cartes translucides, boutons arrondis et police Nunito SemiBold locale (licence OFL dans src/renderer/assets/OFL-Nunito.txt). Bouton Mettre à jour directement sous Jouer. Les liens restent contrôlés par la configuration existante. Vue adaptée aux fenêtres 1100×690 et 920×600, animations réduites selon la préférence du système.
