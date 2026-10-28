@@ -73,6 +73,7 @@ function progress(step, percent, label) { send("progress", { step, percent, labe
 function applyManifest(m) {
   CONFIG = {
     ...BUNDLED,
+    links: { ...BUNDLED.links, ...m.links },
     gameVersion: m.gameVersion || GAME_VERSION,
     minecraftVersion: m.minecraft || BUNDLED.minecraftVersion,
     neoforgeVersion: m.neoforge || BUNDLED.neoforgeVersion,
