@@ -1,6 +1,6 @@
 @font-face{font-family:Nunito;src:url("assets/nunito-semibold.ttf") format("truetype");font-weight:100 900;font-display:swap}
 :root{--card:rgba(35,24,56,.72);--card-hi:rgba(70,44,94,.8);--line:rgba(190,161,232,.22);--muted:#c3b6d5;--lav:#dac4ff;--bar:rgba(17,11,29,.75);--side:rgba(22,14,36,.62)}
-body{font-family:Nunito,"Segoe UI",sans-serif;background:#110b20 url("assets/citadel_twilight.png") center/cover no-repeat}
+body{font-family:Nunito,"Segoe UI",sans-serif;background:#110b20 url("assets/citadel_twilight.png") calc(50% + clamp(120px,15vw,190px)) center/cover no-repeat}
 .app{background:linear-gradient(90deg,rgba(13,8,25,.52),rgba(13,8,25,.05));border-color:rgba(219,193,255,.24)}
 .titlebar{height:40px;backdrop-filter:blur(20px);background:rgba(17,10,29,.7)}
 .side{width:188px;margin:14px 0 14px 14px;border:1px solid var(--line);border-radius:22px;backdrop-filter:blur(22px);box-shadow:0 16px 48px #08051144}

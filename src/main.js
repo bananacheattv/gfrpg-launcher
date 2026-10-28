@@ -257,7 +257,7 @@ app.on("window-all-closed", () => app.quit());
 ipcMain.handle("get-config", async () => { await manifestReady; return { ...CONFIG, launcherVersion: app.getVersion() }; });
 ipcMain.handle("get-update-status", async () => { await manifestReady;return checkUpdates(); });
 ipcMain.handle("update-game", () => updateGame());
-ipcMain.handle("install-launcher-update", () => { if (updater && launcherDownloaded && !activeGame && !launching && !updating) {updater.quitAndInstall();return true;}return false; });
+ipcMain.handle("install-launcher-update", () => { if (updater && launcherDownloaded && !activeGame && !launching && !updating) {updater.quitAndInstall(true, true);return true;}return false; });
 ipcMain.handle("get-settings", () => ({ ram: settings.ram, playerName: settings.playerName, loggedIn: !!settings.msToken }));
 ipcMain.handle("set-ram", (_e, ram) => { settings.ram = Math.min(16, Math.max(2, Number(ram) || 4)); saveSettings(); return settings.ram; });
 ipcMain.handle("login", async () => {
