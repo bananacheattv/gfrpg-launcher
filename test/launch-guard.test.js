@@ -96,3 +96,12 @@ test("launch continuation is consumed once and refuses unchanged or expired vers
     assert.equal(vm.runInContext("consumePlayAfterUpdate()",main.ctx),false);
   }
 });
+
+
+test("community links can be updated through the game manifest", async () => {
+  const main=loadMain();
+  vm.runInContext(`applyManifest({mods:[],links:{discord:"https://discord.gg/fixture",website:"https://fixture.test"}})`,main.ctx);
+  const config=await main.ipc["get-config"]();
+  assert.equal(config.links.discord,"https://discord.gg/fixture");
+  assert.equal(config.links.website,"https://fixture.test");
+});
