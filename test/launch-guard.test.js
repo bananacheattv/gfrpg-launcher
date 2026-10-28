@@ -56,3 +56,43 @@ test("launcher update installs silently and relaunches only when ready and idle"
   assert.equal(main.ipc["install-launcher-update"](),true);
   assert.deepEqual(calls,[[true,true]]);
 });
+
+
+test("Play downloads and silently installs an available launcher before touching Minecraft", async () => {
+  const main=loadMain(),calls=[];main.ctx.record=(...args)=>calls.push(args);
+  vm.runInContext(`updater={
+    async checkForUpdates(){launcherUpdate=true;record("check");},
+    async downloadUpdate(){record("download");launcherDownloaded=true;},
+    quitAndInstall(...args){record("install",...args);}
+  }`,main.ctx);
+  main.ipc.play();main.ipc.play();await flush();await flush();
+  assert.deepEqual(calls,[["check"],["download"],["install",true,true]]);
+  assert.equal(main.authCalls(),0);assert.equal(main.syncs(),0);assert.equal(main.children.length,0);
+  assert.equal(vm.runInContext("settings.playAfterUpdate.fromVersion",main.ctx),"1.3.3");
+  main.ipc.play();await flush();assert.equal(calls.length,3);
+});
+
+test("a failed launcher download blocks Minecraft and allows retry", async () => {
+  const main=loadMain();
+  vm.runInContext(`updater={async checkForUpdates(){launcherUpdate=true;},async downloadUpdate(){throw Error("offline");}}`,main.ctx);
+  main.ipc.play();await flush();await flush();
+  assert.equal(main.authCalls(),0);assert.equal(main.syncs(),0);
+  assert.equal(vm.runInContext("updating||launching||installingLauncher",main.ctx),false);
+  assert.equal(vm.runInContext("updateStatus.busy",main.ctx),false);
+  assert.equal(vm.runInContext("settings.playAfterUpdate",main.ctx),undefined);
+});
+
+test("up-to-date launcher continues through the usual single game launch", async () => {
+  const main=loadMain();vm.runInContext("updater={async checkForUpdates(){}}",main.ctx);
+  main.ipc.play();await flush();main.unblock();await flush();await flush();
+  assert.equal(main.authCalls(),1);assert.equal(main.children.length,1);
+});
+
+test("launch continuation is consumed once and refuses unchanged or expired versions", () => {
+  for(const [fromVersion,expiresAt,expected] of [["1.3.2",Date.now()+60000,true],["1.3.3",Date.now()+60000,false],["1.3.2",Date.now()-1,false]]){
+    const main=loadMain();main.ctx.ticket={fromVersion,expiresAt};
+    vm.runInContext("settings.playAfterUpdate=ticket",main.ctx);
+    assert.equal(vm.runInContext("consumePlayAfterUpdate()",main.ctx),expected);
+    assert.equal(vm.runInContext("consumePlayAfterUpdate()",main.ctx),false);
+  }
+});

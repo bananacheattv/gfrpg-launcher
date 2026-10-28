@@ -21,6 +21,7 @@ let settings = { ram: 4, msToken: null, playerName: null };
 let launching = false;
 let activeGame = null;
 let updating = false, updater = null, launcherUpdate = false, launcherDownloaded = false;
+let launcherCheck = Promise.resolve(), installingLauncher = false;
 let updateStatus = { available: false, checking: true, busy: false, message: "Vérification des mises à jour…" };
 function publishUpdates(extra = {}) {
   updateStatus = { ...updateStatus, ...extra, launcher: launcherUpdate, restart: launcherDownloaded };
@@ -164,8 +165,33 @@ function installLoadingTheme() {
   } catch (e) { console.log("Thème de chargement non installé : " + e.message); }
 }
 
+// A one-shot launch request survives the silent installer, but never retries the same version.
+function consumePlayAfterUpdate() {
+  const pending=settings.playAfterUpdate;
+  if(!pending)return false;
+  delete settings.playAfterUpdate;saveSettings();
+  return pending.fromVersion!==app.getVersion()&&pending.expiresAt>Date.now();
+}
+async function updateLauncherBeforePlay() {
+  await launcherCheck;
+  if(!updater)return false;
+  progress("launcher",0,"Vérification du launcher…");
+  try { await updater.checkForUpdates(); }
+  catch(error) { if(launcherUpdate&&!launcherDownloaded)throw error; }
+  if(!launcherUpdate&&!launcherDownloaded)return false;
+  updating=true;
+  publishUpdates({busy:true,checking:false,message:"Mise à jour automatique du launcher…"});
+  if(!launcherDownloaded)await updater.downloadUpdate();
+  if(!launcherDownloaded)throw new Error("Le téléchargement du launcher n’est pas terminé. Réessaie Jouer.");
+  settings.playAfterUpdate={fromVersion:app.getVersion(),expiresAt:Date.now()+15*60*1000};saveSettings();
+  progress("launcher",100,"Redémarrage du launcher puis lancement de Minecraft…");
+  installingLauncher=true;updater.quitAndInstall(true,true);
+  return true;
+}
+
 // ---------- lancement ----------
 async function play() {
+  if (installingLauncher) return;
   if (updating) {send("error", "Mise à jour en cours. Attends sa fin avant de lancer Minecraft.");return;}
   if (launching || activeGame) {
     send("error", "Minecraft est déjà lancé ou en cours de préparation. Ferme le jeu avant de le relancer.");
@@ -175,6 +201,7 @@ async function play() {
   launching = true; // set synchronously, before authentication or any download
   try {
     send("state", { playing: true });
+    if(await updateLauncherBeforePlay())return;
     let mc = await restoreSession();
     if (!mc) {
       progress("auth", 0, "Connexion Microsoft…");
@@ -209,10 +236,14 @@ async function play() {
     progress("launch", 100, "Jeu lancé ! Bon jeu sur Aeloria.");
     setTimeout(() => { if (win) win.minimize(); }, 3000);
   } catch (err) {
+    installingLauncher=false;updating=false;
+    if(settings.playAfterUpdate){delete settings.playAfterUpdate;try{saveSettings();}catch{}}
+    publishUpdates({busy:false,checking:false});
     console.error(err);
     send("state", { playing: false, playerName: settings.playerName });
     send("error", String(err.message || err));
   } finally {
+    if(!installingLauncher)updating=false;
     launching = false;
   }
 }
@@ -243,11 +274,15 @@ app.whenReady().then(async () => {
       updater.on("update-available", () => { launcherUpdate = true;publishUpdates({ available: true, message: "Mise à jour du launcher disponible." }); });
       updater.on("download-progress", info => publishUpdates({ busy: true, percent: info.percent, message: "Téléchargement du launcher… " + Math.round(info.percent) + " %" }));
       updater.on("update-downloaded", () => { launcherDownloaded = true;publishUpdates({ busy: false, available: true, message: "Redémarre le launcher pour installer sa mise à jour." }); });
-      updater.checkForUpdates().catch(() => {});
+      launcherCheck=updater.checkForUpdates().catch(() => {});
     } catch {}
   }
   const mc = await restoreSession();
   send("state", { playing: launching || !!activeGame, playerName: settings.playerName, loggedIn: !!mc });
+  if(consumePlayAfterUpdate()) {
+    if(win.webContents.isLoading())win.webContents.once("did-finish-load",()=>play());
+    else play();
+  }
 });
 app.on("second-instance", () => {
   if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); }
