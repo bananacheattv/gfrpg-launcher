@@ -178,6 +178,8 @@
           <div class="stat"><div class="lbl"><span class="dot gold"></span>Version du jeu</div><div class="val" id="valVer">…</div></div>
         </div>
         <button class="play" id="playBtn"><div class="fill" id="fill"></div><div class="txt"><span class="spin"></span><span id="playTxt">JOUER</span><span class="chev">»</span></div></button>
+        <button id="updateBtn" style="width:100%;margin-top:10px;padding:12px;border:1px solid var(--gold-dk);background:#17121d;color:var(--gold-hi);border-radius:6px;cursor:pointer" disabled>Vérification des mises à jour…</button>
+        <div class="status" id="updateTxt" role="status" aria-live="polite"></div>
         <div class="status" id="statusTxt"></div>
         <div class="social">
           <div class="c" data-link="discord" hidden title="Discord"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="5"/><circle cx="9" cy="11" r=".8"/><circle cx="15" cy="11" r=".8"/><path d="M8 20l2-3M16 20l-2-3"/></svg></div>
@@ -270,6 +272,21 @@ async function toggleLogin() {
 }
 $("accBtn").onclick = toggleLogin; $("accBtn2").onclick = toggleLogin;
 
+let updates = { checking: true };
+function renderUpdates() {
+  const button = $("updateBtn");
+  button.disabled = playing || updates.busy || updates.checking;
+  button.textContent = updates.busy ? "MISE À JOUR… " + Math.round(updates.percent || 0) + " %" : updates.checking ? "VÉRIFICATION…" : updates.restart ? "REDÉMARRER POUR METTRE À JOUR" : updates.available ? "METTRE À JOUR" : updates.offline ? "VÉRIFIER LES MISES À JOUR" : "À JOUR";
+  $("updateTxt").textContent = updates.message || "";
+  $("playBtn").disabled = !!updates.busy;
+}
+aeloria.onUpdateStatus(state => { updates = state;renderUpdates(); });
+$("updateBtn").onclick = async () => {
+  if (playing || updates.busy || updates.checking) return;
+  if (updates.restart) {await aeloria.installLauncherUpdate();return;}
+  if (updates.available) {const result = await aeloria.updateGame();if (!result.ok) toast(result.message);}
+  else {updates = await aeloria.getUpdateStatus();renderUpdates();}
+};
 /* ---------- bouton JOUER ---------- */
 function setPlay(label, percent, busy, indet) {
   const b = $("playBtn");
@@ -279,10 +296,11 @@ function setPlay(label, percent, busy, indet) {
 }
 function setPlaying(p) {
   playing = p;
+  renderUpdates();
   if (!p) { setPlay("JOUER", 0, false); $("statusTxt").textContent = ""; }
   else if (!$("playBtn").classList.contains("busy")) setPlay("DÉMARRAGE…", 0, true, true);
 }
-$("playBtn").onclick = () => { if (playing) return; setPlaying(true); aeloria.play(); };
+$("playBtn").onclick = () => { if (playing || updates.busy) return; setPlaying(true); aeloria.play(); };
 aeloria.onProgress(d => {
   if (d.step === "idle") return;
   if (d.step === "update") { $("statusTxt").textContent = d.label; return; }
@@ -321,6 +339,7 @@ async function refreshServer() {
 }
 (async () => {
   cfg = await aeloria.getConfig();
+  aeloria.getUpdateStatus().then(state => {updates=state;renderUpdates();});
   $("valVer").textContent = cfg.gameVersion || "0.0";
   $("aboutTxt").textContent = "Aeloria — Jeu " + (cfg.gameVersion || "0.0") + " · Minecraft " + cfg.minecraftVersion + " · NeoForge " + (cfg.neoforgeVersion || "?")
     + (cfg.modpackVersion ? " · mod " + cfg.modpackVersion : "");
