@@ -40,3 +40,19 @@ test("public game version remains 0.0 independently from Minecraft and installer
   const main=loadMain();const config=await main.ipc["get-config"]();
   assert.equal(config.gameVersion,"0.0");assert.equal(config.minecraftVersion,"26.3");assert.equal(config.launcherVersion,"1.3.3");
 });
+
+
+test("launcher update installs silently and relaunches only when ready and idle", () => {
+  const main=loadMain(),calls=[];main.ctx.recordInstall=(...args)=>calls.push(args);
+  vm.runInContext("updater={quitAndInstall:recordInstall}",main.ctx);
+  assert.equal(main.ipc["install-launcher-update"](),false);
+  vm.runInContext("launcherDownloaded=true",main.ctx);
+  for(const flag of ["activeGame","launching","updating"]){
+    vm.runInContext(flag+"=true",main.ctx);
+    assert.equal(main.ipc["install-launcher-update"](),false);
+    vm.runInContext(flag+"=false",main.ctx);
+  }
+  assert.deepEqual(calls,[]);
+  assert.equal(main.ipc["install-launcher-update"](),true);
+  assert.deepEqual(calls,[[true,true]]);
+});
