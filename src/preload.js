@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld("aeloria", {
   onUpdateStatus: (cb) => ipcRenderer.on("update-status", (_e, d) => cb(d)),
   play: () => ipcRenderer.invoke("play"),
   openLink: (url) => ipcRenderer.invoke("open-link", url),
+  installShaders: () => ipcRenderer.invoke("install-shaders"),
+  openShadersFolder: () => ipcRenderer.invoke("open-shaders-folder"),
   openFolder: () => ipcRenderer.invoke("open-folder"),
   serverStatus: () => ipcRenderer.invoke("server-status"),
   minimize: () => ipcRenderer.invoke("win-minimize"),

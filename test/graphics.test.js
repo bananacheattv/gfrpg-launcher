@@ -1,0 +1,7 @@
+const test=require('node:test'),assert=require('node:assert/strict');const{resolveGraphics}=require('../src/graphics');
+const file=name=>({filename:name+'.jar',url:'https://cdn.modrinth.com/data/'+name+'.jar',primary:true,hashes:{sha512:'a'.repeat(128)}});
+const iris={version_type:'release',game_versions:['26.3'],loaders:['neoforge'],dependencies:[{project_id:'AANobbMI',dependency_type:'required',version_id:'exact-sodium'}],files:[file('iris')]};
+const sodium={game_versions:['26.3'],loaders:['neoforge'],files:[file('sodium')]};
+test('shader resolver selects the exact required Sodium version and verifies both platform and digests',async()=>{const urls=[];const result=await resolveGraphics('26.3',async u=>{urls.push(u);return u.includes('/project/')?[iris]:sodium});assert.equal(result.length,2);assert.equal(result[0].file,'sodium.jar');assert.ok(urls[1].endsWith('/exact-sodium'));});
+test('shader resolver refuses unavailable Minecraft versions',async()=>{await assert.rejects(resolveGraphics('future',async()=>[]),/Aucun Iris/);});
+test('shader resolver refuses foreign loaders, download origins and invalid hashes',async()=>{for(const bad of [{...sodium,loaders:['fabric']},{...sodium,files:[{...file('sodium'),url:'https://evil.example/x.jar'}]},{...sodium,files:[{...file('sodium'),hashes:{sha512:'bad'}}]}])await assert.rejects(resolveGraphics('26.3',async u=>u.includes('/project/')?[iris]:bad));});
