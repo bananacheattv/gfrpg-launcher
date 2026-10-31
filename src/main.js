@@ -1,10 +1,12 @@
 // Aeloria Launcher — processus principal Electron
 // Manifeste distant (mis à jour à chaque push du mod) → Java (Mojang) → Minecraft + NeoForge → mods → auth Microsoft → lancement
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, clipboard } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { Auth } = require("msmc");
 const { Game, download, valid } = require("./game");
+const { createLogger } = require("./logger");
+const { Presence, DEFAULT_APP_ID } = require("./discord");
 // Public game version is independent of Minecraft and installer updates.
 const GAME_VERSION = "0.0";
 
@@ -13,6 +15,16 @@ const BUNDLED = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "launcher-
 const ROOT = path.join(app.getPath("appData"), ".grandfantacube");        // dossier du jeu
 const SETTINGS_FILE = path.join(ROOT, "launcher-settings.json");
 const MANIFEST_CACHE = path.join(ROOT, "modpack-manifest.json");
+
+// Journal : fichier launcher.log dans le dossier de données + onglet Logs ; console.* y est recopié.
+const logger = createLogger(ROOT, line => send("log-line", line));
+for (const level of ["log", "warn", "error"]) {
+  const orig = console[level].bind(console);
+  console[level] = (...a) => { try { orig(...a); } catch {} logger[level === "log" ? "info" : level](...a); };
+}
+logger.info(`Aeloria Launcher ${app.getVersion()} — ${process.platform} — journal : ${logger.file}`);
+// Rich Presence « Dans le launcher » ; coupée pendant que le jeu tourne (le mod affiche alors classe et zone).
+const presence = new Presence({ clientId: BUNDLED.discordAppId || DEFAULT_APP_ID, log: m => logger.info(m) });
 
 let CONFIG = { ...BUNDLED, gameVersion: GAME_VERSION };
 let win = null;
@@ -220,17 +232,20 @@ async function play() {
     const auth = mc.mclc();
     const acc = { name: auth.name, uuid: auth.uuid, token: auth.access_token, xuid: auth.meta?.xuid, type: "msa" };
     const server = CONFIG.autoConnect && CONFIG.serverIp && !CONFIG.serverIp.startsWith("A_REMPLACER") ? CONFIG.serverIp : null;
+    presence.setActive(false);
     const p = game.launch(acc, [`-Xmx${settings.ram}G`, `-Daeloria.server=${CONFIG.serverIp || "192.168.0.249:25565"}`], server);
     activeGame = p;
-    p.stdout.on("data", d => { try { process.stdout.write("[mc] " + d); } catch {} });
-    p.stderr.on("data", d => { try { process.stdout.write("[mc] " + d); } catch {} });
+    p.stdout.on("data", d => { try { process.stdout.write("[mc] " + d); logger.info("[mc] " + String(d).trimEnd()); } catch {} });
+    p.stderr.on("data", d => { try { process.stdout.write("[mc] " + d); logger.info("[mc] " + String(d).trimEnd()); } catch {} });
     p.on("error", e => {
       if (activeGame === p) activeGame = null;
+      presence.setActive(true);
       send("state", { playing: false, playerName: settings.playerName });
       send("error", "Lancement impossible : " + e.message);
     });
     p.on("close", () => {
       if (activeGame === p) activeGame = null;
+      presence.setActive(true);
       send("state", { playing: false, playerName: settings.playerName });
       progress("idle", 0, "");
     });
@@ -238,6 +253,7 @@ async function play() {
     setTimeout(() => { if (win) win.minimize(); }, 3000);
   } catch (err) {
     installingLauncher=false;updating=false;
+    if(!activeGame)presence.setActive(true);
     if(settings.playAfterUpdate){delete settings.playAfterUpdate;try{saveSettings();}catch{}}
     publishUpdates({busy:false,checking:false});
     console.error(err);
@@ -267,6 +283,7 @@ app.whenReady().then(async () => {
   loadSettings();
   manifestReady = loadManifest();
   createWindow();
+  presence.start();
   // Mise à jour auto du launcher (GitHub Releases) — silencieux en dev
   if (app.isPackaged) {
     try {
@@ -289,6 +306,7 @@ app.on("second-instance", () => {
   if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); }
 });
 app.on("window-all-closed", () => app.quit());
+app.on("before-quit", () => presence.stop());
 
 ipcMain.handle("get-config", async () => { await manifestReady; return { ...CONFIG, launcherVersion: app.getVersion() }; });
 ipcMain.handle("get-update-status", async () => { await manifestReady;return checkUpdates(); });
@@ -312,6 +330,9 @@ ipcMain.handle("install-shaders",async()=>{
   catch(e){return{ok:false,message:e.message};}finally{updating=false;publishUpdates({busy:false});}
 });
 ipcMain.handle("open-shaders-folder",()=>{const folder=path.join(ROOT,"shaderpacks");fs.mkdirSync(folder,{recursive:true});return shell.openPath(folder);});
+ipcMain.handle("get-logs", () => ({ text: logger.text(), file: logger.file }));
+ipcMain.handle("copy-logs", () => { clipboard.writeText(logger.text()); return true; });
+ipcMain.handle("open-logs-folder", () => shell.openPath(logger.dir));
 ipcMain.handle("open-folder", () => { fs.mkdirSync(ROOT, { recursive: true }); return shell.openPath(ROOT); });
 ipcMain.handle("win-minimize", () => { if (win) win.minimize(); });
 ipcMain.handle("win-maximize", () => { if (win) (win.isMaximized() ? win.unmaximize() : win.maximize()); });

@@ -24,3 +24,6 @@ Après une erreur `ENOENT`/`EPERM` sur un fichier `.jar.part`, fermer Minecraft 
 
 ### Interface 1.3.6
 Fond citadelle original partagé avec le jeu, navigation et cartes translucides, boutons arrondis et police Nunito SemiBold locale (licence OFL dans src/renderer/assets/OFL-Nunito.txt). Bouton Mettre à jour directement sous Jouer. Les liens restent contrôlés par la configuration existante. Vue adaptée aux fenêtres 1100×690 et 920×600, animations réduites selon la préférence du système.
+
+### 1.3.12
+Rich Presence Discord « Dans le launcher » (même application que le jeu ; coupée pendant que le jeu tourne, `src/discord.js`) et onglet Logs (journal `launcher.log` dans `%APPDATA%\.grandfantacube`, `src/logger.js`).

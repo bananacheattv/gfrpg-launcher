@@ -154,6 +154,7 @@
         <a data-page="news"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/></svg>News</a>
         <a data-page="changelog"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/></svg>Changelog</a>
         <a data-page="account"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20c.8-4 3.6-6 7.5-6s6.7 2 7.5 6"/></svg>Compte</a>
+        <a data-page="logs"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Logs</a>
         <a data-link="website" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c3 3.6 3 13.4 0 17M12 3.5c-3 3.6-3 13.4 0 17"/></svg>Site web<svg class="ext" viewBox="0 0 24 24"><path d="M8 16 16 8M9 8h7v7"/></svg></a>
         <a data-link="shop" hidden><svg viewBox="0 0 24 24"><path d="M4 8h16l-1.4 11H5.4zM8.5 8a3.5 3.5 0 0 1 7 0"/></svg>Boutique<svg class="ext" viewBox="0 0 24 24"><path d="M8 16 16 8M9 8h7v7"/></svg></a>
         <a data-link="wiki" hidden><svg viewBox="0 0 24 24"><path d="M5 4.5h10a2 2 0 0 1 2 2V20H7a2 2 0 0 1-2-2zM17 8h2v12h-2"/></svg>Wiki<svg class="ext" viewBox="0 0 24 24"><path d="M8 16 16 8M9 8h7v7"/></svg></a>
@@ -211,6 +212,12 @@
         <div class="about">Le compte Microsoft sert à lancer Minecraft et à rejoindre le serveur.</div>
       </div>
 
+      <div class="page settings" id="p-logs">
+        <h1>LOGS</h1>
+        <div class="row"><div class="l">Journal du launcher<small id="logFile"></small></div><div><button class="btn primary" id="logCopy">Copier</button> <button class="btn" id="logFolder">Ouvrir le dossier</button></div></div>
+        <pre id="logBox" style="flex:1;min-height:200px;max-height:420px;overflow:auto;margin:12px 0 0;padding:10px 12px;background:#0b0910cc;border:1px solid #ffffff1f;border-radius:10px;font:12px/1.45 Consolas,monospace;color:#c9c0dc;white-space:pre-wrap;word-break:break-word"></pre>
+      </div>
+
       <div class="page settings" id="p-settings">
         <h1>RÉGLAGES</h1>
         <div class="row"><div class="l">Mémoire allouée au jeu<small>2 à 16 Go : 6 à 8 Go conviennent à la plupart des machines.</small></div>
@@ -239,6 +246,8 @@ if (!window.aeloria) {
     getSettings: async () => ({ ram: 8, playerName: demo.get("out") ? null : "Dev", loggedIn: true }),
     setRam: async v => v, login: async () => ({ playerName: "Dev" }), logout: async () => true, play: async () => true, openLink: async () => true,
     serverStatus: async () => ({ online: true, players: 4, max: 100 }), openFolder: async () => true,
+    getLogs: async () => ({ text: "12:00:00 Aperçu\n12:00:01 [Discord] Statut affiché : « Dans le launcher »", file: "%APPDATA%\\.grandfantacube\\launcher.log" }), copyLogs: async () => true, openLogsFolder: async () => true, onLogLine: () => {},
+    getUpdateStatus: async () => ({ message: "Aeloria est à jour." }), onUpdateStatus: () => {}, updateGame: async () => ({ ok: true }), installLauncherUpdate: async () => false,
     minimize() {}, maximize() {}, close() {},
     onProgress: cb => { if (demo.get("demo") === "loading") setTimeout(() => cb({ step: "launch", percent: 25, label: "Préparation de Minecraft 26.3…" }), 300); },
     onState: cb => { if (demo.get("demo") === "loading") setTimeout(() => cb({ playing: true, playerName: "Dev" }), 200); }, onError: () => {}
@@ -333,6 +342,16 @@ function setRamFill(v) { $("ram").style.setProperty("--pct", ((v - 2) / 14) * 10
 $("ram").oninput = e => { $("ramVal").textContent = e.target.value + " Go"; setRamFill(e.target.value); };
 $("ram").onchange = e => aeloria.setRam(e.target.value);
 $("openDir").onclick = () => aeloria.openFolder();
+
+/* ---------- logs ---------- */
+{
+  const box = $("logBox");
+  const append = t => { const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30; box.textContent += (box.textContent ? "\n" : "") + t; if (stick) box.scrollTop = box.scrollHeight; };
+  aeloria.getLogs().then(r => { box.textContent = r.text; $("logFile").textContent = "Fichier : " + r.file; box.scrollTop = box.scrollHeight; });
+  aeloria.onLogLine(append);
+  $("logCopy").onclick = async () => { await aeloria.copyLogs(); toast("Logs copiés dans le presse-papiers."); };
+  $("logFolder").onclick = () => aeloria.openLogsFolder();
+}
 
 /* ---------- donnees ---------- */
 function card(title, sub, body, date) {
