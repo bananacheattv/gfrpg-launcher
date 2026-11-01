@@ -6,21 +6,21 @@ const vm = require("node:vm");
 const { EventEmitter } = require("node:events");
 
 function loadMain(primary = true) {
-  const ipc = {}, events = {}, children = []; let syncs = 0, quits = 0, authCalls = 0;
+  const launched = [], ipc = {}, events = {}, children = []; let syncs = 0, quits = 0, authCalls = 0;
   let unblock; const gate = new Promise(resolve => { unblock = resolve; });
   const config = JSON.stringify({ mods: [], minecraftVersion: "26.3", neoforgeVersion: "test", manifestUrl: "https://fixture.test/manifest" });
   const app = { getPath: () => "/fixture", getVersion: () => "1.3.3", requestSingleInstanceLock: () => primary, quit: () => quits++, whenReady: () => new Promise(() => {}), on: (name, cb) => { events[name] = cb; } };
   const fakeFs = { ...fs, readFileSync: file => String(file).endsWith("launcher-config.json") ? config : String(file).endsWith("launcher-settings.json") ? '{}' : (() => { throw Error("no cache"); })(), mkdirSync: () => {}, writeFileSync: () => {}, existsSync: () => false, readdirSync: () => [] };
   const fakeGame = { download: async () => {}, valid: () => false, Game: class {
     async prepare() { syncs++; await gate; }
-    launch() { const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); children.push(child); return child; }
+    launch(...args) { launched.push(args); const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); children.push(child); return child; }
   } };
   const mc = { profile: { name: "Test" }, mclc: () => ({ name: "Test", uuid: "test", access_token: "test", meta: {} }) };
   const ctx = vm.createContext({ require: name => name === "electron" ? { app, ipcMain: { handle: (name, cb) => { ipc[name] = cb; } }, shell: {}, BrowserWindow: class {} }
     : name === "./logger" ? { createLogger: () => ({ file: "/f", dir: "/d", info() {}, warn() {}, error() {}, text: () => "" }) } : name === "./discord" ? { Presence: class { start() {} setActive() {} stop() {} }, DEFAULT_APP_ID: "x" } : name === "fs" ? fakeFs : name === "./updates" ? require("../src/updates") : name === "./game" ? fakeGame : name === "msmc" ? { Auth: class { async launch() { authCalls++; return { getMinecraft: async () => mc, save: () => "token" }; } async refresh() { return { getMinecraft: async () => mc, save: () => "token" }; } } } : require(name),
     __dirname: path.join(__dirname, "../src"), console: { log() {}, warn() {}, error() {} }, process, Buffer, setTimeout: () => {}, fetch: async () => ({ ok: true, text: async () => JSON.stringify({ mods: [], minecraft: "26.3" }) }) });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../src/main.js"), "utf8"), ctx);
-  return { ctx, ipc, events, children, unblock, syncs: () => syncs, quits: () => quits, authCalls: () => authCalls };
+  return { ctx, ipc, events, children, launched, unblock, syncs: () => syncs, quits: () => quits, authCalls: () => authCalls };
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
@@ -104,4 +104,11 @@ test("community links can be updated through the game manifest", async () => {
   const config=await main.ipc["get-config"]();
   assert.equal(config.links.discord,"https://discord.gg/fixture");
   assert.equal(config.links.website,"https://fixture.test");
+});
+
+test("solo launch skips the server connection and flags the game", async () => {
+  const main = loadMain(); main.unblock();
+  main.ipc.play(null, true); await flush(); await flush();
+  const [, jvm, server] = main.launched[0];
+  assert.equal(server, null); assert.ok(jvm.includes("-Daeloria.solo=true"));
 });

@@ -223,7 +223,7 @@ class Game {
   }
 
   /** acc = { name, uuid, token, xuid, type } */
-  launch(acc, extraJvm = [], quickPlayServer = null) {
+  launch(acc, extraJvm = [], quickPlayServer = null, quickPlayWorld = null) {
     const sep = OS === "windows" ? ";" : ":";
     const natives = path.join(this.dir, "natives");
     fs.mkdirSync(natives, { recursive: true });
@@ -238,9 +238,9 @@ class Game {
       user_type: acc.type || "msa", version_type: "release", natives_directory: natives,
       launcher_name: "Aeloria", launcher_version: "1", classpath: cp.join(sep),
       library_directory: path.join(this.dir, "libraries"), classpath_separator: sep,
-      quickPlayMultiplayer: quickPlayServer || ""
+      quickPlayMultiplayer: quickPlayServer || "", quickPlaySingleplayer: quickPlayWorld || ""
     };
-    const features = { is_quick_play_multiplayer: !!quickPlayServer };
+    const features = { is_quick_play_multiplayer: !!quickPlayServer, is_quick_play_singleplayer: !!quickPlayWorld };
     const sub = s => String(s).replace(/\$\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
     const add = (out, list) => {
       for (const a of list || []) {

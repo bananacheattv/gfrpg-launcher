@@ -203,7 +203,7 @@ async function updateLauncherBeforePlay() {
 }
 
 // ---------- lancement ----------
-async function play() {
+async function play(solo = false) {
   if (installingLauncher) return;
   if (updating) {send("error", "Mise à jour en cours. Attends sa fin avant de lancer Minecraft.");return;}
   if (launching || activeGame) {
@@ -231,9 +231,11 @@ async function play() {
 
     const auth = mc.mclc();
     const acc = { name: auth.name, uuid: auth.uuid, token: auth.access_token, xuid: auth.meta?.xuid, type: "msa" };
-    const server = CONFIG.autoConnect && CONFIG.serverIp && !CONFIG.serverIp.startsWith("A_REMPLACER") ? CONFIG.serverIp : null;
+    // Solo : monde local « Aeloria Solo » (ouvert directement s'il existe, sinon menu du mod), sans connexion au serveur.
+    const soloWorld = solo && fs.existsSync(path.join(ROOT, "saves", "Aeloria Solo")) ? "Aeloria Solo" : null;
+    const server = solo ? null : CONFIG.autoConnect && CONFIG.serverIp && !CONFIG.serverIp.startsWith("A_REMPLACER") ? CONFIG.serverIp : null;
     presence.setActive(false);
-    const p = game.launch(acc, [`-Xmx${settings.ram}G`, `-Daeloria.server=${CONFIG.serverIp || "192.168.0.249:25565"}`], server);
+    const p = game.launch(acc, [`-Xmx${settings.ram}G`, `-Daeloria.server=${CONFIG.serverIp || "192.168.0.249:25565"}`, ...(solo ? ["-Daeloria.solo=true"] : [])], server, soloWorld);
     activeGame = p;
     p.stdout.on("data", d => { try { process.stdout.write("[mc] " + d); logger.info("[mc] " + String(d).trimEnd()); } catch {} });
     p.stderr.on("data", d => { try { process.stdout.write("[mc] " + d); logger.info("[mc] " + String(d).trimEnd()); } catch {} });
@@ -319,7 +321,7 @@ ipcMain.handle("login", async () => {
   return { playerName: settings.playerName };
 });
 ipcMain.handle("logout", () => { settings.msToken = null; settings.playerName = null; saveSettings(); return true; });
-ipcMain.handle("play", () => { play(); return true; });
+ipcMain.handle("play", (_e, solo) => { play(solo === true); return true; });
 ipcMain.handle("open-link", (_e, url) => {
   if (typeof url === "string" && /^https?:\/\//i.test(url)) shell.openExternal(url);          // jamais autre chose qu'un lien web
 });
