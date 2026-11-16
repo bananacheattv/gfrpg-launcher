@@ -17,7 +17,7 @@ function loadMain(primary = true) {
   } };
   const mc = { profile: { name: "Test" }, mclc: () => ({ name: "Test", uuid: "test", access_token: "test", meta: {} }) };
   const ctx = vm.createContext({ require: name => name === "electron" ? { app, ipcMain: { handle: (name, cb) => { ipc[name] = cb; } }, shell: {}, BrowserWindow: class {} }
-    : name === "./logger" ? { createLogger: () => ({ file: "/f", dir: "/d", info() {}, warn() {}, error() {}, text: () => "" }) } : name === "./discord" ? { Presence: class { start() {} setActive() {} stop() {} }, DEFAULT_APP_ID: "x" } : name === "fs" ? fakeFs : name === "./updates" ? require("../src/updates") : name === "./game" ? fakeGame : name === "msmc" ? { Auth: class { async launch() { authCalls++; return { getMinecraft: async () => mc, save: () => "token" }; } async refresh() { return { getMinecraft: async () => mc, save: () => "token" }; } } } : require(name),
+    : name === "./logger" ? { createLogger: () => ({ file: "/f", dir: "/d", info() {}, warn() {}, error() {}, text: () => "" }) } : name === "./discord" ? { Presence: class { start() {} setActive() {} stop() {} }, DEFAULT_APP_ID: "x" } : name === "fs" ? fakeFs : name === "./account" ? require("../src/account") : name === "./updates" ? require("../src/updates") : name === "./game" ? fakeGame : name === "msmc" ? { Auth: class { async launch() { authCalls++; return { getMinecraft: async () => mc, save: () => "token" }; } async refresh() { return { getMinecraft: async () => mc, save: () => "token" }; } } } : require(name),
     __dirname: path.join(__dirname, "../src"), console: { log() {}, warn() {}, error() {} }, process, Buffer, setTimeout: () => {}, fetch: async () => ({ ok: true, text: async () => JSON.stringify({ mods: [], minecraft: "26.3" }) }) });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../src/main.js"), "utf8"), ctx);
   return { ctx, ipc, events, children, launched, unblock, syncs: () => syncs, quits: () => quits, authCalls: () => authCalls };
@@ -111,4 +111,29 @@ test("solo launch skips the server connection and flags the game", async () => {
   main.ipc.play(null, true); await flush(); await flush();
   const [, jvm, server] = main.launched[0];
   assert.equal(server, null); assert.ok(jvm.includes("-Daeloria.solo=true"));
+});
+
+test("Aéloria accounts: server play needs the website account, then links the Microsoft player once", async () => {
+  const main=loadMain(),api=[];
+  const reply=(status,body)=>({ok:status<400,status,json:async()=>body,text:async()=>JSON.stringify(body)});
+  main.ctx.fetch=async(url,init={})=>{
+    if(String(url).startsWith("https://fixture.test/manifest"))return reply(200,{mods:[],minecraft:"26.3"});
+    api.push(String(url).replace("https://api.test/api",""));
+    if(url.endsWith("/auth/login"))return reply(200,{token:"tok",account:{username:"Lyra",minecraft:null}});
+    if(url.endsWith("/account"))return reply(200,{account:{username:"Lyra",minecraft:{uuid:"test",name:"Test"}},credits:5});
+    return reply(404,{error:"?"});
+  };
+  vm.runInContext(`BUNDLED.accountApi="https://api.test";CONFIG.accountApi=BUNDLED.accountApi`,main.ctx);
+  main.ipc.play();await flush();await flush();
+  assert.equal(main.authCalls(),0);assert.equal(main.syncs(),0);
+  assert.equal(vm.runInContext("launching",main.ctx),false);
+  main.ipc.play(null,true);await flush();await flush();
+  assert.equal(main.syncs(),1,"solo stays available without a website account");
+  main.unblock();await flush();await flush();main.children[0].emit("close",0);
+  const login=await main.ipc["account-login"](null,"Lyra","bon-mot-de-passe");
+  assert.equal(login.ok,true,login.message);assert.equal(login.status.username,"Lyra");assert.equal(login.status.credits,5);
+  main.ipc.play();for(let i=0;i<6;i++)await flush();
+  assert.equal(main.children.length,2);assert.ok(api.includes("/account"));
+  assert.equal(vm.runInContext("settings.aeloriaUser.minecraft",main.ctx),"Test");
+  const out=await main.ipc["account-logout"]();assert.equal(out.loggedIn,false);
 });

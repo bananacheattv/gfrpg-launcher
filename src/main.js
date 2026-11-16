@@ -1,9 +1,10 @@
 // Aeloria Launcher — processus principal Electron
 // Manifeste distant (mis à jour à chaque push du mod) → Java (Mojang) → Minecraft + NeoForge → mods → auth Microsoft → lancement
-const { app, BrowserWindow, ipcMain, shell, clipboard } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, clipboard, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { Auth } = require("msmc");
+const { normalizeApi, AccountClient, ensureLinked } = require("./account");
 const { Game, download, valid } = require("./game");
 const { createLogger } = require("./logger");
 const { Presence, DEFAULT_APP_ID } = require("./discord");
@@ -29,7 +30,7 @@ const presence = new Presence({ clientId: BUNDLED.discordAppId || DEFAULT_APP_ID
 let CONFIG = { ...BUNDLED, gameVersion: GAME_VERSION };
 let win = null;
 let manifestReady = Promise.resolve();
-let settings = { ram: 4, msToken: null, playerName: null };
+let settings = { ram: 4, msToken: null, playerName: null, aeloriaToken: null, aeloriaUser: null };
 let launching = false;
 let activeGame = null;
 let updating = false, updater = null, launcherUpdate = false, launcherDownloaded = false;
@@ -90,6 +91,7 @@ function applyManifest(m) {
     minecraftVersion: m.minecraft || BUNDLED.minecraftVersion,
     neoforgeVersion: m.neoforge || BUNDLED.neoforgeVersion,
     serverIp: m.serverIp || BUNDLED.serverIp,
+    accountApi: m.accountApi || BUNDLED.accountApi || "",
     modpackVersion: m.version,
     modpackDate: m.date,
     modpackNotes: Array.isArray(m.notes) ? m.notes : [],
@@ -164,6 +166,55 @@ async function interactiveLogin() {
   return mc;
 }
 
+// ---------- compte Aéloria (créé sur le site) ----------
+// Actif seulement si launcher-config.json (ou le manifeste) donne « accountApi » ; sinon le launcher garde son ancien fonctionnement.
+function accountClient() {
+  const base = normalizeApi(CONFIG.accountApi);
+  return base ? new AccountClient(base, { fetchImpl: (...args) => fetch(...args) }) : null;
+}
+// Jeton de session chiffré par Windows (DPAPI) quand c'est possible.
+function sealToken(token) {
+  try { if (safeStorage && safeStorage.isEncryptionAvailable()) return "enc:" + safeStorage.encryptString(token).toString("base64"); } catch {}
+  return token;
+}
+function openToken(stored) {
+  if (typeof stored !== "string" || !stored) return null;
+  if (!stored.startsWith("enc:")) return stored;
+  try { return safeStorage.decryptString(Buffer.from(stored.slice(4), "base64")); } catch { return null; }
+}
+const accountSummary = account => ({ username: account.username, minecraft: account.minecraft ? account.minecraft.name : null });
+function saveAccount(token, account) {
+  settings.aeloriaToken = token ? sealToken(token) : null;
+  settings.aeloriaUser = token && account ? accountSummary(account) : null;
+  saveSettings();
+}
+function mcIdentity(mc) {
+  const auth = mc.mclc();
+  return { accessToken: auth.access_token, uuid: auth.uuid, name: auth.name };
+}
+function signupUrl() {
+  const links = CONFIG.links || {};
+  if (/^https:\/\//i.test(links.account || "")) return links.account;
+  return /^https:\/\//i.test(links.website || "") ? links.website.replace(/\/+$/, "") + "/compte.html#inscription" : "";
+}
+async function accountStatus(refresh = true) {
+  const client = accountClient();
+  const base = { enabled: !!client, signupUrl: signupUrl() };
+  if (!client) return base;
+  const token = openToken(settings.aeloriaToken);
+  if (!token) return { ...base, loggedIn: false };
+  const cached = { ...(settings.aeloriaUser || {}) };
+  if (!refresh) return { ...base, loggedIn: true, ...cached };
+  try {
+    const data = await client.me(token);
+    settings.aeloriaUser = accountSummary(data.account);saveSettings();
+    return { ...base, loggedIn: true, ...settings.aeloriaUser, credits: data.credits };
+  } catch (error) {
+    if (error.status === 401) { saveAccount(null); return { ...base, loggedIn: false, message: error.message }; }
+    return { ...base, loggedIn: true, offline: true, ...cached, message: error.message };
+  }
+}
+
 // ---------- écran de chargement de NeoForge aux couleurs d'Aeloria ----------
 // NeoForge lit config/fml/theme-default.json avant de charger les mods : le launcher le dépose à chaque lancement (le mod fait pareil).
 // Un thème personnalisé sans la marque "_aeloria" n'est jamais remplacé.
@@ -215,12 +266,28 @@ async function play(solo = false) {
   try {
     send("state", { playing: true });
     if(await updateLauncherBeforePlay())return;
+    // Serveur : compte Aéloria obligatoire quand les comptes sont activés (le solo reste libre).
+    const accounts = solo ? null : accountClient();
+    const accountToken = accounts && openToken(settings.aeloriaToken);
+    if (accounts && !accountToken) { send("account", await accountStatus(false)); throw new Error("Connecte-toi d’abord à ton compte Aéloria (page Compte)."); }
     let mc = await restoreSession();
     if (!mc) {
       progress("auth", 0, "Connexion Microsoft…");
       mc = await interactiveLogin();
     }
     send("state", { playing: true, playerName: settings.playerName });
+    if (accounts) {
+      // Première partie : le personnage Microsoft est lié au compte Aéloria (preuve Mojang) ; ensuite il doit rester le même.
+      progress("auth", 0, "Vérification du compte Aéloria…");
+      try {
+        const data = await ensureLinked(accounts, accountToken, mcIdentity(mc));
+        settings.aeloriaUser = accountSummary(data.account);saveSettings();
+        send("account", await accountStatus(false));
+      } catch (error) {
+        if (error.status === 401) { saveAccount(null); send("account", await accountStatus(false)); }
+        throw error;
+      }
+    }
 
     await loadManifest();
     await syncMods();
@@ -321,6 +388,36 @@ ipcMain.handle("login", async () => {
   return { playerName: settings.playerName };
 });
 ipcMain.handle("logout", () => { settings.msToken = null; settings.playerName = null; saveSettings(); return true; });
+ipcMain.handle("account-status", async () => { await manifestReady; return accountStatus(); });
+ipcMain.handle("account-login", async (_e, login, password) => {
+  const client = accountClient();
+  if (!client) return { ok: false, message: "Les comptes Aéloria ne sont pas encore ouverts." };
+  try {
+    const data = await client.login(String(login || "").trim().slice(0, 254), String(password || "").slice(0, 128));
+    saveAccount(data.token, data.account);
+    return { ok: true, status: await accountStatus() };
+  } catch (error) { return { ok: false, message: error.message }; }
+});
+ipcMain.handle("account-logout", async () => {
+  const client = accountClient(), token = openToken(settings.aeloriaToken);
+  saveAccount(null);
+  if (client && token) client.logout(token).catch(() => {});
+  return accountStatus(false);
+});
+// Mot de passe oublié : la connexion Microsoft prouve qu'on possède le personnage lié au compte.
+ipcMain.handle("account-reset", async (_e, newPassword) => {
+  const client = accountClient();
+  if (!client) return { ok: false, message: "Les comptes Aéloria ne sont pas encore ouverts." };
+  if (launching || activeGame) return { ok: false, message: "Ferme Minecraft avant de changer le mot de passe." };
+  try {
+    let mc = await restoreSession();
+    if (!mc) mc = await interactiveLogin();
+    send("state", { playing: false, playerName: settings.playerName });
+    const data = await client.resetPassword(mcIdentity(mc), String(newPassword || "").slice(0, 128));
+    saveAccount(data.token, data.account);
+    return { ok: true, status: await accountStatus() };
+  } catch (error) { return { ok: false, message: error && error.message ? error.message : "Connexion Microsoft annulée." }; }
+});
 ipcMain.handle("play", (_e, solo) => { play(solo === true); return true; });
 ipcMain.handle("open-link", (_e, url) => {
   if (typeof url === "string" && /^https?:\/\//i.test(url)) shell.openExternal(url);          // jamais autre chose qu'un lien web
